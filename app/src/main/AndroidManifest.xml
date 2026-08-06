@@ -9,7 +9,8 @@
         tools:ignore="QueryAllPackagesPermission" />
 
     <!-- Special permission (granted via Settings, not a runtime prompt) that lets us read
-         how much cache/data each app is using via StorageStatsManager. -->
+         how much cache/data each app is using via StorageStatsManager, and — the same
+         permission — how much network data each app has used via NetworkStatsManager. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 

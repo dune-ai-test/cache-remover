@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.dune.appcache.data.SettingsRepository
 import com.dune.appcache.ui.screens.AboutScreen
+import com.dune.appcache.ui.screens.DataUsageScreen
 import com.dune.appcache.ui.screens.HomeScreen
 import com.dune.appcache.ui.screens.SettingsScreen
 import com.dune.appcache.ui.theme.AccentGreen
@@ -41,7 +42,26 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     NavHost(navController = navController, startDestination = "home") {
                         composable("home") {
-                            HomeScreen(onOpenSettings = { navController.navigate("settings") })
+                            HomeScreen(
+                                onOpenSettings = { navController.navigate("settings") },
+                                onOpenDataUsage = {
+                                    navController.navigate("data") {
+                                        popUpTo("home")
+                                        launchSingleTop = true
+                                    }
+                                },
+                            )
+                        }
+                        composable("data") {
+                            DataUsageScreen(
+                                onOpenSettings = { navController.navigate("settings") },
+                                onOpenCache = {
+                                    navController.navigate("home") {
+                                        popUpTo("home")
+                                        launchSingleTop = true
+                                    }
+                                },
+                            )
                         }
                         composable("settings") {
                             SettingsScreen(

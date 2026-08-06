@@ -27,8 +27,15 @@ This is the same approach every legitimate cleaner app on the Play Store uses to
 ## Permissions used
 
 - `QUERY_ALL_PACKAGES` — to list installed apps (Android 11+ requirement; be ready to justify this in the Play Console questionnaire if you publish).
-- `PACKAGE_USAGE_STATS` — special permission, granted via Settings (not a runtime dialog), needed to read cache sizes.
+- `PACKAGE_USAGE_STATS` — special permission, granted via Settings (not a runtime dialog), needed to read both cache sizes (`StorageStatsManager`) and per-app data usage (`NetworkStatsManager`). One grant covers both features.
 - `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` — for the scheduled/auto clean features.
+
+## Data Usage screen
+
+- Shows real 30-day device totals (Wi-Fi + mobile) and a per-app breakdown, sorted by heaviest user first, each with its own Wi-Fi/mobile split bar — all pulled live from `NetworkStatsManager`.
+- Gated behind the same Usage Access permission as the cache screen, so a user who's already granted it for cache clearing sees data usage immediately.
+- Mobile-data figures rely on a Q+ (Android 10+) allowance that lets an app already holding Usage Access query mobile stats without also holding `READ_PHONE_STATE`. On Android 8/9 devices, mobile totals may read 0 while Wi-Fi still works correctly — this is a platform limitation, not a bug.
+- A persistent pill-shaped bottom nav (Cache / Data / Settings) lives on both the Cache and Data Usage screens; tapping Settings pushes to the Settings screen, which keeps its own back-arrow header instead of the tab bar.
 
 ## Known limitations worth knowing about
 
