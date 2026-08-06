@@ -32,7 +32,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            // Only show the full-screen spinner on the very first load — once we have data,
+            // a refresh should swap it in quietly instead of flashing the list away.
+            val alreadyHasData = _uiState.value.apps.isNotEmpty()
+            if (!alreadyHasData) _uiState.value = _uiState.value.copy(isLoading = true)
             val hasAccess = repository.hasUsageAccess()
             val apps = if (hasAccess) repository.loadApps() else emptyList()
             _uiState.value = HomeUiState(

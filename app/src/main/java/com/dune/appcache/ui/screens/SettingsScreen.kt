@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dune.appcache.data.AppRepository
 import com.dune.appcache.data.formatBytes
+import com.dune.appcache.ui.components.BottomNavBar
+import com.dune.appcache.ui.components.BottomTab
 import com.dune.appcache.ui.components.RowChevron
 import com.dune.appcache.ui.components.RowSwatchChevron
 import com.dune.appcache.ui.components.RowToggle
@@ -64,7 +66,12 @@ import com.dune.appcache.util.CacheActions
 private val scheduleOptions = listOf(6 to "Every 6 hours", 12 to "Every 12 hours", 24 to "Daily", 168 to "Weekly")
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onOpenAbout: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenAbout: () -> Unit,
+    onOpenCache: () -> Unit,
+    onOpenDataUsage: () -> Unit,
+) {
     val context = LocalContext.current
     val viewModel: SettingsViewModel = viewModel()
     val settings by viewModel.settings.collectAsState()
@@ -79,13 +86,13 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAbout: () -> Unit) {
         ownCacheLabel = formatBytes(ownBytes)
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        item {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Fixed header — stays put while the list below scrolls.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp, 16.dp, 16.dp, 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Box(
                     modifier = Modifier.size(40.dp).background(Color.White, CircleShape),
                     contentAlignment = Alignment.Center,
@@ -101,78 +108,98 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAbout: () -> Unit) {
                     modifier = Modifier.weight(1f).padding(start = 12.dp),
                 )
             }
+
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 100.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                item { SectionLabel("CLEANUP") }
+                item {
+                    SettingsRow(
+                        label = "Auto-clean on unlock",
+                        icon = Icons.Rounded.AutoDelete,
+                        iconTint = AccentGreen,
+                        iconBackground = AccentGreenBg,
+                    ) {
+                        RowToggle(checked = settings.autoCleanOnUnlock, onCheckedChange = viewModel::setAutoCleanOnUnlock)
+                    }
+                }
+                item {
+                    SettingsRow(
+                        label = "Scheduled clean",
+                        icon = Icons.Rounded.Schedule,
+                        iconTint = AccentBlue,
+                        iconBackground = AccentBlueBg,
+                        onClick = { showScheduleDialog = true },
+                    ) {
+                        val current = scheduleOptions.firstOrNull { it.first == settings.scheduledCleanIntervalHours }?.second ?: "Off"
+                        RowValueChevron(if (settings.scheduledCleanEnabled) current else "Off")
+                    }
+                }
+
+                item { SectionLabel("APPEARANCE") }
+                item {
+                    SettingsRow(
+                        label = "Accent color",
+                        icon = Icons.Rounded.Palette,
+                        iconTint = AccentPurple,
+                        iconBackground = AccentPurpleBg,
+                        onClick = { showColorDialog = true },
+                    ) {
+                        RowSwatchChevron(Color(settings.accentColorArgb))
+                    }
+                }
+
+                item { SectionLabel("SYSTEM") }
+                item {
+                    SettingsRow(
+                        label = "Notifications",
+                        icon = Icons.Rounded.Notifications,
+                        iconTint = AccentOrange,
+                        iconBackground = AccentOrangeBg,
+                    ) {
+                        RowToggle(checked = settings.notificationsEnabled, onCheckedChange = viewModel::setNotificationsEnabled)
+                    }
+                }
+                item {
+                    SettingsRow(
+                        label = "Storage info",
+                        icon = Icons.Rounded.Storage,
+                        iconTint = AccentGreenAlt,
+                        iconBackground = AccentGreenBg,
+                        onClick = { CacheActions.openStorageSettings(context) },
+                    ) {
+                        RowValueChevron(ownCacheLabel)
+                    }
+                }
+                item {
+                    SettingsRow(
+                        label = "About",
+                        icon = Icons.Rounded.Info,
+                        iconTint = AccentPurple,
+                        iconBackground = AccentPurpleBg,
+                        onClick = onOpenAbout,
+                    ) {
+                        RowChevron()
+                    }
+                }
+            }
         }
 
-        item { SectionLabel("CLEANUP") }
-        item {
-            SettingsRow(
-                label = "Auto-clean on unlock",
-                icon = Icons.Rounded.AutoDelete,
-                iconTint = AccentGreen,
-                iconBackground = AccentGreenBg,
-            ) {
-                RowToggle(checked = settings.autoCleanOnUnlock, onCheckedChange = viewModel::setAutoCleanOnUnlock)
-            }
-        }
-        item {
-            SettingsRow(
-                label = "Scheduled clean",
-                icon = Icons.Rounded.Schedule,
-                iconTint = AccentBlue,
-                iconBackground = AccentBlueBg,
-                onClick = { showScheduleDialog = true },
-            ) {
-                val current = scheduleOptions.firstOrNull { it.first == settings.scheduledCleanIntervalHours }?.second ?: "Off"
-                RowValueChevron(if (settings.scheduledCleanEnabled) current else "Off")
-            }
-        }
-
-        item { SectionLabel("APPEARANCE") }
-        item {
-            SettingsRow(
-                label = "Accent color",
-                icon = Icons.Rounded.Palette,
-                iconTint = AccentPurple,
-                iconBackground = AccentPurpleBg,
-                onClick = { showColorDialog = true },
-            ) {
-                RowSwatchChevron(Color(settings.accentColorArgb))
-            }
-        }
-
-        item { SectionLabel("SYSTEM") }
-        item {
-            SettingsRow(
-                label = "Notifications",
-                icon = Icons.Rounded.Notifications,
-                iconTint = AccentOrange,
-                iconBackground = AccentOrangeBg,
-            ) {
-                RowToggle(checked = settings.notificationsEnabled, onCheckedChange = viewModel::setNotificationsEnabled)
-            }
-        }
-        item {
-            SettingsRow(
-                label = "Storage info",
-                icon = Icons.Rounded.Storage,
-                iconTint = AccentGreenAlt,
-                iconBackground = AccentGreenBg,
-                onClick = { CacheActions.openStorageSettings(context) },
-            ) {
-                RowValueChevron(ownCacheLabel)
-            }
-        }
-        item {
-            SettingsRow(
-                label = "About",
-                icon = Icons.Rounded.Info,
-                iconTint = AccentPurple,
-                iconBackground = AccentPurpleBg,
-                onClick = onOpenAbout,
-            ) {
-                RowChevron()
-            }
-        }
+        BottomNavBar(
+            selected = BottomTab.SETTINGS,
+            onSelect = { tab ->
+                when (tab) {
+                    BottomTab.CACHE -> onOpenCache()
+                    BottomTab.DATA -> onOpenDataUsage()
+                    BottomTab.SETTINGS -> Unit
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 10.dp),
+        )
     }
 
     if (showScheduleDialog) {

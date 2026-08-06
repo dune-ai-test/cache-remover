@@ -10,6 +10,7 @@ import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
+import com.dune.appcache.util.AppFilters
 import com.dune.appcache.util.PermissionUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,9 +45,7 @@ class DataUsageRepository(private val context: Context) {
         installed
             .filter { it.enabled }
             .mapNotNull { appInfo ->
-                val isUserApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
-                val hasLauncherEntry = pm.getLaunchIntentForPackage(appInfo.packageName) != null
-                if (!isUserApp && !hasLauncherEntry) return@mapNotNull null
+                if (AppFilters.isSystemOnly(appInfo)) return@mapNotNull null
 
                 val wifi = queryUidTotal(ConnectivityManager.TYPE_WIFI, appInfo.uid)
                 val mobile = queryUidTotal(ConnectivityManager.TYPE_MOBILE, appInfo.uid)

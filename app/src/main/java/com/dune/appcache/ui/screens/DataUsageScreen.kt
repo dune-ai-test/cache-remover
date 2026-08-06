@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,10 +19,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,24 +61,29 @@ fun DataUsageScreen(onOpenSettings: () -> Unit, onOpenCache: () -> Unit) {
     val viewModel: DataUsageViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
 
-    // Re-check after the user comes back from granting Usage Access.
+    // Same rule as the Cache screen: only auto-refresh on resume if we truly have nothing
+    // yet, or we're waiting to detect a just-granted Usage Access permission. Otherwise
+    // reopening the app or switching tabs should not re-scan and flash the list.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val state = viewModel.uiState.value
+                if (!state.hasUsageAccess || state.apps.isEmpty()) viewModel.refresh()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 100.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                Column {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Fixed header — stays put while the list below scrolls.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp, 16.dp, 16.dp, 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text("Data Usage", style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
                     Text(
                         "Last 30 days · Wi-Fi + mobile",
@@ -84,50 +91,64 @@ fun DataUsageScreen(onOpenSettings: () -> Unit, onOpenCache: () -> Unit) {
                         color = TextSecondary,
                     )
                 }
+                Box(
+                    modifier = Modifier.size(40.dp).background(Color.White, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    IconButton(onClick = { viewModel.refresh() }) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = "Refresh", tint = TextPrimary)
+                    }
+                }
             }
 
-            if (!uiState.hasUsageAccess) {
-                item {
-                    UsageAccessCard(
-                        explanation = "Android requires the same one-time \"Usage access\" permission before any app can read how much data other apps have used.",
-                        onGrant = { CacheActions.openUsageAccessSettings(context) },
-                    )
-                }
-            } else {
-                item {
-                    SummaryCard(
-                        totalLabel = formatBytes(uiState.summary.totalBytes),
-                        wifiLabel = formatBytes(uiState.summary.wifiBytes),
-                        mobileLabel = formatBytes(uiState.summary.mobileBytes),
-                    )
-                }
-
-                item {
-                    Text(
-                        "Top apps by data",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary,
-                    )
-                }
-
-                if (uiState.isLoading) {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 100.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (!uiState.hasUsageAccess) {
                     item {
-                        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = AccentGreen)
-                        }
-                    }
-                } else if (uiState.apps.isEmpty()) {
-                    item {
-                        Text(
-                            "No app data usage recorded in the last 30 days yet.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(vertical = 24.dp),
+                        UsageAccessCard(
+                            explanation = "Android requires the same one-time \"Usage access\" permission before any app can read how much data other apps have used.",
+                            onGrant = { CacheActions.openUsageAccessSettings(context) },
                         )
                     }
                 } else {
-                    items(uiState.apps, key = { it.packageName }) { app ->
-                        AppDataRow(app)
+                    item {
+                        SummaryCard(
+                            totalLabel = formatBytes(uiState.summary.totalBytes),
+                            wifiLabel = formatBytes(uiState.summary.wifiBytes),
+                            mobileLabel = formatBytes(uiState.summary.mobileBytes),
+                        )
+                    }
+
+                    item {
+                        Text(
+                            "Top apps by data",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
+                        )
+                    }
+
+                    if (uiState.isLoading) {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = AccentGreen)
+                            }
+                        }
+                    } else if (uiState.apps.isEmpty()) {
+                        item {
+                            Text(
+                                "No app data usage recorded in the last 30 days yet.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(vertical = 24.dp),
+                            )
+                        }
+                    } else {
+                        items(uiState.apps, key = { it.packageName }) { app ->
+                            AppDataRow(app)
+                        }
                     }
                 }
             }

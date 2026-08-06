@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -67,12 +68,16 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenDataUsage: () -> Unit) {
     val viewModel: HomeViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
 
-    // Re-check real cache sizes whenever the user comes back — e.g. after clearing an app's
-    // cache from the App Info screen we sent them to, or after granting Usage Access.
+    // Only auto-refresh on resume if we genuinely need to — either nothing has loaded yet, or
+    // we're waiting to detect that the user just granted Usage Access. If we already have
+    // data, coming back to the app (or switching tabs) should NOT re-scan and flash the list.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val state = viewModel.uiState.value
+                if (!state.hasUsageAccess || state.apps.isEmpty()) viewModel.refresh()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -81,65 +86,69 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenDataUsage: () -> Unit) {
     var showRemoveAllDialog by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 168.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Fixed header — stays put while the list below scrolls.
+            Box(modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp)) {
                 HeaderRow(
                     cachedLabel = formatBytes(uiState.totalCacheBytes),
                     appCount = uiState.appCount,
                     onOpenSettings = onOpenSettings,
+                    onRefresh = { viewModel.refresh() },
                 )
             }
 
-            if (!uiState.hasUsageAccess) {
-                item {
-                    UsageAccessCard(
-                        explanation = "Android requires a one-time \"Usage access\" permission before any app can read how much cache other apps are using.",
-                        onGrant = { CacheActions.openUsageAccessSettings(context) },
-                    )
-                }
-            }
-
-            if (uiState.hasUsageAccess) {
-                item {
-                    Text(
-                        "All apps",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary,
-                    )
-                }
-
-                if (uiState.isLoading) {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 168.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (!uiState.hasUsageAccess) {
                     item {
-                        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = AccentGreen)
-                        }
+                        UsageAccessCard(
+                            explanation = "Android requires a one-time \"Usage access\" permission before any app can read how much cache other apps are using.",
+                            onGrant = { CacheActions.openUsageAccessSettings(context) },
+                        )
                     }
-                } else if (uiState.apps.isEmpty()) {
+                }
+
+                if (uiState.hasUsageAccess) {
                     item {
                         Text(
-                            "Nothing cached right now — you're all clean.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(vertical = 24.dp),
+                            "All apps",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
                         )
                     }
-                } else {
-                    items(uiState.apps, key = { it.packageName }) { app ->
-                        AppRow(
-                            app = app,
-                            onRemove = {
-                                if (app.isOwnApp) {
-                                    CacheActions.clearOwnCache(context)
-                                    viewModel.refresh()
-                                } else {
-                                    CacheActions.openAppInfo(context, app.packageName)
-                                }
-                            },
-                        )
+
+                    if (uiState.isLoading) {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = AccentGreen)
+                            }
+                        }
+                    } else if (uiState.apps.isEmpty()) {
+                        item {
+                            Text(
+                                "Nothing cached right now — you're all clean.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(vertical = 24.dp),
+                            )
+                        }
+                    } else {
+                        items(uiState.apps, key = { it.packageName }) { app ->
+                            AppRow(
+                                app = app,
+                                onRemove = {
+                                    if (app.isOwnApp) {
+                                        CacheActions.clearOwnCache(context)
+                                        viewModel.refresh()
+                                    } else {
+                                        CacheActions.openAppInfo(context, app.packageName)
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -157,7 +166,7 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenDataUsage: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
             ) {
                 Icon(Icons.Rounded.DeleteSweep, contentDescription = null, tint = Color.White)
-                Spacer4dp()
+                Box(modifier = Modifier.width(8.dp))
                 Text("Remove All", color = Color.White, style = MaterialTheme.typography.bodyLarge)
             }
         }
@@ -190,12 +199,12 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenDataUsage: () -> Unit) {
 }
 
 @Composable
-private fun Spacer4dp() {
-    Box(modifier = Modifier.width(8.dp))
-}
-
-@Composable
-private fun HeaderRow(cachedLabel: String, appCount: Int, onOpenSettings: () -> Unit) {
+private fun HeaderRow(
+    cachedLabel: String,
+    appCount: Int,
+    onOpenSettings: () -> Unit,
+    onRefresh: () -> Unit,
+) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Text("App Cache", style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
@@ -205,15 +214,22 @@ private fun HeaderRow(cachedLabel: String, appCount: Int, onOpenSettings: () -> 
                 color = TextSecondary,
             )
         }
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(Color.White, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = TextPrimary)
-            }
+        RoundIconButton(icon = Icons.Rounded.Refresh, contentDescription = "Refresh", onClick = onRefresh)
+        Box(modifier = Modifier.width(8.dp))
+        RoundIconButton(icon = Icons.Rounded.Settings, contentDescription = "Settings", onClick = onOpenSettings)
+    }
+}
+
+@Composable
+private fun RoundIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, contentDescription: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .background(Color.White, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        IconButton(onClick = onClick) {
+            Icon(icon, contentDescription = contentDescription, tint = TextPrimary)
         }
     }
 }

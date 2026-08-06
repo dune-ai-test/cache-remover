@@ -10,6 +10,7 @@ import android.os.Process
 import android.os.storage.StorageManager
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
+import com.dune.appcache.util.AppFilters
 import com.dune.appcache.util.PermissionUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,10 +34,8 @@ class AppRepository(private val context: Context) {
         installed
             .filter { it.enabled }
             .mapNotNull { appInfo ->
-                // Skip apps with no launchable UI and no real cache footprint (system services etc.)
-                val isUserApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
-                val hasLauncherEntry = pm.getLaunchIntentForPackage(appInfo.packageName) != null
-                if (!isUserApp && !hasLauncherEntry) return@mapNotNull null
+                // Skip genuine system components — see AppFilters for the exact rule.
+                if (AppFilters.isSystemOnly(appInfo)) return@mapNotNull null
 
                 val label = try {
                     pm.getApplicationLabel(appInfo).toString()
